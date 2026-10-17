@@ -1,0 +1,30 @@
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>התפריט של מייק</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>body{margin:0;font:16px system-ui,sans-serif;background:#f6f4ef;color:#1d2421;display:grid;place-items:center;min-height:100vh}
+@media (prefers-color-scheme:dark){body{background:#121614;color:#e8ece9}}</style></head>
+<body><p id="m">טוען את התפריט…</p><script>
+(async function(){
+ const msg=t=>document.getElementById("m").textContent=t;
+ try{ if(window.Telegram&&Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();} }catch(e){}
+ const q=new URLSearchParams(location.search), k=q.get("k");
+ if(!k){msg("חסר מפתח. פותחים מהכפתור בטלגרם.");return;}
+ const raw=Uint8Array.from(atob(k.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
+ const S=crypto.subtle, imp=b=>S.importKey("raw",b,{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const kk=await imp(raw), te=new TextEncoder();
+ const kenc=await imp(await S.sign("HMAC",kk,te.encode("enc"))), kmac=await imp(await S.sign("HMAC",kk,te.encode("mac")));
+ const idx=await (await fetch("data/index.json",{cache:"no-store"})).json();
+ const pad=n=>String(n).padStart(2,"0"), today=new Date(), t=today.getFullYear()+"-"+pad(today.getMonth()+1)+"-"+pad(today.getDate());
+ let w=q.get("w")?Number(q.get("w")):null;
+ if(!w){const cur=idx.weeks.filter(x=>x.start<=t).pop(); w=(cur||idx.weeks[0]).n;}
+ const d=await (await fetch("data/W"+pad(w)+".json",{cache:"no-store"})).json();
+ const un=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)), nonce=un(d.n), c=un(d.c), tag=un(d.t);
+ const mac=new Uint8Array(await S.sign("HMAC",kmac,new Uint8Array([...nonce,...c])));
+ if(mac.length!==tag.length||mac.some((x,i)=>x!==tag[i])){msg("המפתח לא מתאים.");return;}
+ const blocks=Math.ceil(c.length/32), jobs=[];
+ for(let i=0;i<blocks;i++){const b=new Uint8Array(20);b.set(nonce);new DataView(b.buffer).setUint32(16,i);jobs.push(S.sign("HMAC",kenc,b));}
+ const ks=await Promise.all(jobs), p=new Uint8Array(c.length);
+ for(let i=0;i<c.length;i++)p[i]=c[i]^new Uint8Array(ks[i>>5])[i&31];
+ document.open();document.write(new TextDecoder().decode(p));document.close();
+})().catch(e=>{document.getElementById("m").textContent="שגיאה בטעינה: "+e.message;});
+</script></body></html>
